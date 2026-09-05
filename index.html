@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSA / SMS BASIC Calculator</title>
+<style>
+  :root{
+    --bg:#10151c; --panel:#171e27; --panel2:#1c2530; --border:#28323e;
+    --text:#e7ebf0; --muted:#8a97a6; --muted2:#5f6c7a;
+    --accent:#3fb68b; --accent-dim:#245e49;
+    --warn:#e1a73c; --warn-dim:#5a4322;
+    --danger:#d4685a;
+    --font-ui:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    --font-mono:ui-monospace,'SF Mono',Consolas,'Courier New',monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--text); font-family:var(--font-ui); min-height:100vh;}
+  .wrap{max-width:1080px; margin:0 auto; padding:28px 20px 80px;}
+  .topbar{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:28px; flex-wrap:wrap; gap:8px;}
+  .brand{font-family:var(--font-mono); font-size:14px; color:var(--muted);}
+  .brand b{color:var(--text);}
+  .dot-pill{font-family:var(--font-mono); font-size:13px; color:var(--muted); border:1px solid var(--border); padding:4px 10px; border-radius:20px;}
+  .dot-pill button{background:none;border:none;color:var(--accent);cursor:pointer;font-family:var(--font-mono);font-size:13px;margin-left:8px;padding:0;}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:28px; margin-bottom:20px;}
+  .card h2{margin:0 0 4px; font-size:18px; font-weight:600;}
+  .card .sub{color:var(--muted); font-size:14px; margin:0 0 20px;}
+  label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px; font-weight:500;}
+  input[type=text], input[type=number], input[type=date]{
+    width:100%; background:var(--panel2); border:1px solid var(--border); color:var(--text);
+    padding:11px 12px; border-radius:7px; font-family:var(--font-mono); font-size:14px;
+  }
+  input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;}
+  @media (max-width:640px){ .row3{grid-template-columns:1fr;} }
+  .field{margin-bottom:18px;}
+  .segbtns{display:flex; gap:8px;}
+  .segbtn{flex:1; text-align:center; padding:11px; border-radius:7px; border:1px solid var(--border); background:var(--panel2); cursor:pointer; font-size:14px; color:var(--muted);}
+  .segbtn.active{border-color:var(--accent); color:var(--text); background:var(--accent-dim);}
+  button.primary{background:var(--accent); color:#0c1712; border:none; padding:13px 22px; border-radius:7px; font-weight:600; font-size:14px; cursor:pointer;}
+  button.primary:disabled{opacity:.5; cursor:default;}
+  .status{font-family:var(--font-mono); font-size:13px; color:var(--muted); margin-top:14px; min-height:18px;}
+  .status.err{color:var(--danger);}
+  .basics-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:6px;}
+  @media (max-width:760px){ .basics-grid{grid-template-columns:repeat(2,1fr);} }
+  .basic-tile{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:16px;}
+  .basic-tile .label{font-size:12.5px; color:var(--muted); margin-bottom:8px;}
+  .basic-tile .value{font-family:var(--font-mono); font-size:26px; font-weight:600;}
+  .basic-tile .value.na{color:var(--muted2); font-size:18px;}
+  .meta-line{font-family:var(--font-mono); font-size:12.5px; color:var(--muted); margin-top:16px; line-height:1.8; border-top:1px solid var(--border); padding-top:14px;}
+  .table-toolbar{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:12px; flex-wrap:wrap;}
+  .table-toolbar .counts{font-size:13px; color:var(--muted);}
+  .table-toolbar .counts b{color:var(--text);}
+  .toggle{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); cursor:pointer; user-select:none;}
+  .toggle input{width:auto;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  thead th{text-align:left; font-size:11px; color:var(--muted); font-weight:500; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap;}
+  tbody td{padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:middle; font-family:var(--font-mono);}
+  tbody tr.unmatched{background:var(--warn-dim);}
+  .badge{display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-family:var(--font-ui); font-weight:600;}
+  .badge.ok{background:var(--accent-dim); color:var(--accent);}
+  .badge.bad{background:var(--warn-dim); color:var(--warn);}
+  .oos{color:var(--danger); font-weight:600;}
+  .fixinput{width:150px; background:var(--panel); border:1px solid var(--border); color:var(--text); padding:5px 7px; border-radius:5px; font-family:var(--font-mono); font-size:12.5px;}
+  .fixinput.saved{border-color:var(--accent);}
+  .desc-cell{font-family:var(--font-ui); color:var(--muted); max-width:260px; font-size:12.5px;}
+  .table-scroll{overflow-x:auto;}
+  .hint{font-size:12px; color:var(--muted2); margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">CSA / SMS <b>BASIC Calculator</b> <span style="opacity:.5">(local)</span></div>
+    <div class="dot-pill" id="dotPill" style="display:none;">
+      DOT <span id="dotPillNum"></span> · <span id="dotPillName"></span>
+      <button id="switchDot">сменить</button>
+    </div>
+  </div>
+
+  <div class="card" id="step1">
+    <h2>Выбери перевозчика</h2>
+    <p class="sub">Введи USDOT номер — подтянем название и текущий Power Units из FMCSA Census.</p>
+    <div class="field">
+      <label for="dotInput">USDOT Number</label>
+      <input type="text" id="dotInput" inputmode="numeric" placeholder="напр. 3561058">
+    </div>
+    <button class="primary" id="loadDotBtn">Загрузить перевозчика</button>
+    <div class="status" id="step1Status"></div>
+  </div>
+
+  <div class="card" id="step2" style="display:none;">
+    <h2 id="carrierName">—</h2>
+    <p class="sub" id="carrierSub">—</p>
+    <div class="row3">
+      <div class="field">
+        <label for="asOfDate">As Of Date</label>
+        <input type="date" id="asOfDate">
+      </div>
+      <div class="field">
+        <label for="pu6">Power Units — 6 мес. назад</label>
+        <input type="number" id="pu6" min="0">
+      </div>
+      <div class="field">
+        <label for="pu18">Power Units — 18 мес. назад</label>
+        <input type="number" id="pu18" min="0">
+      </div>
+    </div>
+    <div class="field">
+      <label>Segment (тип флота)</label>
+      <div class="segbtns">
+        <div class="segbtn active" data-seg="Combination">Combination (тягачи/автобусы ≥70%)</div>
+        <div class="segbtn" data-seg="Straight">Straight (прочие ≥30%)</div>
+      </div>
+    </div>
+    <button class="primary" id="calcBtn">Посчитать BASIC</button>
+    <div class="status" id="calcStatus"></div>
+  </div>
+
+  <div id="results" style="display:none;">
+    <div class="card">
+      <h2>BASIC Measures</h2>
+      <p class="sub">Based on a 24-month record ending <span id="asOfEcho"></span></p>
+      <div class="basics-grid" id="basicsGrid"></div>
+      <div class="meta-line" id="metaLine"></div>
+    </div>
+
+    <div class="card">
+      <h2>Что если? (Unsafe Driving / Crash Indicator)</h2>
+      <p class="sub">Оба BASIC делятся на Avg PU × UF, поэтому размер флота и пробег напрямую двигают эти два measure.</p>
+
+      <div class="row3" style="align-items:end;">
+        <div class="field">
+          <label for="targetBasic">BASIC</label>
+          <select id="targetBasic" style="width:100%; background:var(--panel2); border:1px solid var(--border); color:var(--text); padding:11px 12px; border-radius:7px; font-family:var(--font-mono); font-size:14px;">
+            <option value="Unsafe Driving">Unsafe Driving</option>
+            <option value="Crash Indicator">Crash Indicator</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="targetMeasure">Целевой measure</label>
+          <input type="text" id="targetMeasure" placeholder="напр. 5.0">
+        </div>
+        <div class="field">
+          <button class="primary" id="solvePuBtn" style="width:100%;">Сколько нужно Power Units?</button>
+        </div>
+      </div>
+      <div class="status" id="solvePuResult"></div>
+
+      <div class="row3" style="align-items:end; margin-top:8px;">
+        <div class="field">
+          <label for="hypoVmt">Гипотетический VMT (миль/год)</label>
+          <input type="text" id="hypoVmt" placeholder="напр. 1500000">
+        </div>
+        <div class="field">
+          <button class="primary" id="solveMeasureBtn" style="width:100%;">Какой будет measure?</button>
+        </div>
+        <div></div>
+      </div>
+      <div class="status" id="solveMeasureResult"></div>
+      <p class="hint">Расчёт держит фиксированным всё, кроме выбранной переменной (сумму взвешенных нарушений/аварий и, во втором случае, Avg PU — берём как есть из последнего расчёта выше).</p>
+    </div>
+
+    <div class="card">
+      <div class="table-toolbar">
+        <h2 style="margin:0;">Нарушения (violations)</h2>
+        <div class="counts" id="violCounts"></div>
+      </div>
+      <p class="sub" style="margin-top:-8px;">Строки с оранжевым фоном не нашлись в Appendix A по коду. Впиши правильный код — пересчитается автоматически и сохранится в браузере для этого DOT.</p>
+      <label class="toggle"><input type="checkbox" id="onlyUnmatched"> показать только несматченные</label>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Дата</th><th>Inspection ID</th><th>Report #</th><th>Level</th><th>Код</th><th>BASIC</th><th>Weight</th><th>OOS</th><th>Статус</th><th>Adjudication</th><th>Исправить код</th><th>Описание</th></tr>
+          </thead>
+          <tbody id="violBody"></tbody>
+        </table>
+      </div>
+      <p class="hint">Данные: FMCSA data.transportation.gov. Severity weights — SMS Methodology Appendix A v3.21.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+let state = { dot:null, carrierName:null, currentPU:null, mcs150Mileage:null, segment:"Combination", corrections:{} };
+let lastResult = null;
+
+function lsKey(dot){ return `csa_calc_${dot}`; }
+function loadLocal(dot){ try{ const raw = localStorage.getItem(lsKey(dot)); if(raw) return JSON.parse(raw); }catch(e){} return null; }
+function saveLocal(){
+  try{
+    localStorage.setItem(lsKey(state.dot), JSON.stringify({
+      asOfDate: document.getElementById('asOfDate').value,
+      pu6: document.getElementById('pu6').value,
+      pu18: document.getElementById('pu18').value,
+      segment: state.segment,
+      corrections: state.corrections,
+    }));
+  }catch(e){}
+}
+function fmtNum(n,d=2){ if(n==null||!isFinite(n)) return "N/A"; return n.toFixed(d); }
+
+function utilizationFactor(vmtPerAvgPu, segment){
+  if(vmtPerAvgPu == null || !isFinite(vmtPerAvgPu)) return 1.0;
+  if(segment === "Combination"){
+    if(vmtPerAvgPu < 80000) return 1.0;
+    if(vmtPerAvgPu <= 160000) return 1 + (vmtPerAvgPu - 80000) / 133333;
+    if(vmtPerAvgPu <= 200000) return 1.6;
+    return 1.0;
+  } else {
+    if(vmtPerAvgPu < 20000) return 1.0;
+    if(vmtPerAvgPu <= 60000) return vmtPerAvgPu / 20000;
+    if(vmtPerAvgPu <= 200000) return 3.0;
+    return 1.0;
+  }
+}
+
+// g(avgPU) = avgPU * UF(vmt/avgPU) — монотонно неубывающая функция, решаем бинарным поиском
+function denomForAvgPU(avgPU, vmt, segment){
+  const vpu = (vmt && avgPU) ? vmt/avgPU : null;
+  return avgPU * utilizationFactor(vpu, segment);
+}
+function solveAvgPUForDenom(targetDenom, vmt, segment){
+  let lo = 0.01, hi = 100000;
+  for(let i=0; i<80; i++){
+    const mid = (lo+hi)/2;
+    const g = denomForAvgPU(mid, vmt, segment);
+    if(g < targetDenom) lo = mid; else hi = mid;
+  }
+  return (lo+hi)/2;
+}
+
+document.getElementById('solvePuBtn').addEventListener('click', () => {
+  const el = document.getElementById('solvePuResult');
+  if(!lastResult){ el.textContent = "Сначала посчитай BASIC."; el.className="status err"; return; }
+  const basic = document.getElementById('targetBasic').value;
+  const targetMeasure = parseFloat(document.getElementById('targetMeasure').value);
+  if(!targetMeasure || targetMeasure <= 0){ el.textContent = "Впиши целевой measure (> 0)."; el.className="status err"; return; }
+  const rawSum = lastResult.raw_sums[basic];
+  if(!rawSum){ el.textContent = `Сумма нарушений/аварий по "${basic}" равна 0 — любой размер флота даст measure 0.`; el.className="status"; return; }
+  const vmt = lastResult.meta.mcs150_mileage;
+  const segment = lastResult.meta.segment;
+  const targetDenom = rawSum / targetMeasure;
+  const avgPU = solveAvgPUForDenom(targetDenom, vmt, segment);
+  const vpu = vmt ? vmt/avgPU : null;
+  const uf = utilizationFactor(vpu, segment);
+  const pu6 = parseFloat(document.getElementById('pu6').value) || 0;
+  const pu18 = parseFloat(document.getElementById('pu18').value) || 0;
+  const currentPUNeeded = 3*avgPU - pu6 - pu18;
+  const warn = currentPUNeeded < 0
+    ? ` ⚠ Получилось отрицательное число — с такими PU 6/18 мес назад этот measure недостижим, даже если сейчас 0 тягачей.`
+    : "";
+
+  let ufMaxLine = "";
+  if(segment === "Combination"){
+    const milesLow = Math.round(160000 * avgPU);
+    const milesHigh = Math.round(200000 * avgPU);
+    ufMaxLine = `Для максимального UF=1.6 (Combination) при этом Avg PU нужен VMT в диапазоне ${milesLow.toLocaleString()}–${milesHigh.toLocaleString()} миль/год.`;
+  } else {
+    const milesLow = Math.round(60000 * avgPU);
+    const milesHigh = Math.round(200000 * avgPU);
+    ufMaxLine = `Для максимального UF=3 (Straight) при этом Avg PU нужен VMT в диапазоне ${milesLow.toLocaleString()}–${milesHigh.toLocaleString()} миль/год.`;
+  }
+
+  el.className = "status";
+  el.innerHTML = `Нужно Current Power Units ≈ <b style="color:var(--accent); font-size:15px;">${fmtNum(currentPUNeeded,1)}</b>${warn} `+
+    `(при PU 6мес.назад=${pu6} и 18мес.назад=${pu18} как сейчас вписано) → Avg PU ≈ ${fmtNum(avgPU,1)} `+
+    `(при текущем VMT ${vmt||'N/A'}, UF получится ${fmtNum(uf,3)}, VMT/AvgPU = ${vpu?Math.round(vpu):'N/A'}). `+
+    `Числитель (сумма взвешенных): ${fmtNum(rawSum,1)}.<br>${ufMaxLine}`;
+});
+
+document.getElementById('solveMeasureBtn').addEventListener('click', () => {
+  const el = document.getElementById('solveMeasureResult');
+  if(!lastResult){ el.textContent = "Сначала посчитай BASIC."; el.className="status err"; return; }
+  const hypoVmt = parseFloat(document.getElementById('hypoVmt').value);
+  if(!hypoVmt || hypoVmt <= 0){ el.textContent = "Впиши гипотетический VMT (> 0)."; el.className="status err"; return; }
+  const avgPU = lastResult.meta.avg_pu;
+  const segment = lastResult.meta.segment;
+  const vpu = hypoVmt / avgPU;
+  const uf = utilizationFactor(vpu, segment);
+  const puUF = avgPU * uf;
+  const ud = puUF ? lastResult.raw_sums["Unsafe Driving"] / puUF : null;
+  const ci = puUF ? lastResult.raw_sums["Crash Indicator"] / puUF : null;
+  el.className = "status";
+  el.innerHTML = `При VMT ${hypoVmt} (Avg PU не меняем: ${fmtNum(avgPU,1)}) → VMT/AvgPU = ${Math.round(vpu)}, UF = ${fmtNum(uf,3)}, Avg PU×UF = ${fmtNum(puUF)} → `+
+    `<b style="color:var(--text)">Unsafe Driving = ${fmtNum(ud)}</b>, <b style="color:var(--text)">Crash Indicator = ${fmtNum(ci)}</b>.`;
+});
+
+document.getElementById('loadDotBtn').addEventListener('click', async () => {
+  const dot = document.getElementById('dotInput').value.trim();
+  const statusEl = document.getElementById('step1Status');
+  if(!dot){ statusEl.textContent="Впиши USDOT номер."; statusEl.className="status err"; return; }
+  statusEl.textContent = "Загружаю census..."; statusEl.className="status";
+  try{
+    const resp = await fetch(`/api/census/${dot}`);
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || "Ошибка сервера");
+
+    state.dot = dot;
+    state.carrierName = data.legal_name;
+    state.currentPU = data.power_units;
+    state.mcs150Mileage = data.mcs150_mileage;
+
+    document.getElementById('carrierName').textContent = `${state.carrierName} — DOT ${dot}`;
+    document.getElementById('carrierSub').textContent = `Текущее Power Units: ${state.currentPU} · MCS-150 Mileage: ${state.mcs150Mileage ?? 'N/A'}`;
+    document.getElementById('dotPillNum').textContent = dot;
+    document.getElementById('dotPillName').textContent = state.carrierName;
+    document.getElementById('dotPill').style.display = "inline-block";
+
+    const saved = loadLocal(dot);
+    if(saved){
+      if(saved.asOfDate) document.getElementById('asOfDate').value = saved.asOfDate;
+      if(saved.pu6) document.getElementById('pu6').value = saved.pu6;
+      if(saved.pu18) document.getElementById('pu18').value = saved.pu18;
+      if(saved.segment) setSegment(saved.segment);
+      if(saved.corrections) state.corrections = saved.corrections;
+    } else {
+      document.getElementById('pu6').value = state.currentPU;
+      document.getElementById('pu18').value = state.currentPU;
+      if(!document.getElementById('asOfDate').value) document.getElementById('asOfDate').value = new Date().toISOString().slice(0,10);
+    }
+
+    document.getElementById('step1').style.display = "none";
+    document.getElementById('step2').style.display = "block";
+    document.getElementById('results').style.display = "none";
+    statusEl.textContent = "";
+  }catch(err){
+    statusEl.textContent = "Ошибка: " + err.message; statusEl.className = "status err";
+  }
+});
+
+document.getElementById('switchDot').addEventListener('click', () => {
+  document.getElementById('step1').style.display = "block";
+  document.getElementById('step2').style.display = "none";
+  document.getElementById('results').style.display = "none";
+  document.getElementById('dotPill').style.display = "none";
+  document.getElementById('dotInput').value = "";
+});
+
+document.querySelectorAll('.segbtn').forEach(btn => btn.addEventListener('click', () => setSegment(btn.dataset.seg)));
+function setSegment(seg){
+  state.segment = seg;
+  document.querySelectorAll('.segbtn').forEach(b => b.classList.toggle('active', b.dataset.seg === seg));
+}
+
+document.getElementById('calcBtn').addEventListener('click', runCalculation);
+
+async function runCalculation(){
+  const statusEl = document.getElementById('calcStatus');
+  const calcBtn = document.getElementById('calcBtn');
+  const asOfStr = document.getElementById('asOfDate').value;
+  if(!asOfStr){ statusEl.textContent="Укажи As Of Date."; statusEl.className="status err"; return; }
+  const pu6 = parseInt(document.getElementById('pu6').value) || state.currentPU;
+  const pu18 = parseInt(document.getElementById('pu18').value) || state.currentPU;
+
+  calcBtn.disabled = true;
+  saveLocal();
+  statusEl.textContent = "Считаю (тяну инспекции/нарушения/аварии с FMCSA)..."; statusEl.className = "status";
+
+  try{
+    const resp = await fetch('/api/calculate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        dot: state.dot, as_of: asOfStr, pu_current: state.currentPU,
+        pu6, pu18, segment: state.segment, mcs150_mileage: state.mcs150Mileage,
+        corrections: state.corrections,
+      })
+    });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.error || "Ошибка сервера");
+    lastResult = data;
+    statusEl.textContent = "";
+    renderAll();
+  }catch(err){
+    statusEl.textContent = "Ошибка: " + err.message; statusEl.className = "status err";
+  }finally{
+    calcBtn.disabled = false;
+  }
+}
+
+function renderAll(){
+  document.getElementById('results').style.display = "block";
+  document.getElementById('asOfEcho').textContent = document.getElementById('asOfDate').value;
+
+  const grid = document.getElementById('basicsGrid');
+  const order = ["Unsafe Driving","Crash Indicator","HOS Compliance","Vehicle Maintenance","Controlled Substances/Alcohol","Driver Fitness"];
+  grid.innerHTML = order.map(name => {
+    const v = lastResult.measures[name];
+    const cls = v==null ? "value na" : "value";
+    return `<div class="basic-tile"><div class="label">${name}</div><div class="${cls}">${v==null?"N/A":fmtNum(v)}</div></div>`;
+  }).join('');
+
+  const m = lastResult.meta;
+  let ufMaxRangeMain = "";
+  if(m.segment === "Combination"){
+    ufMaxRangeMain = `${Math.round(160000*m.avg_pu).toLocaleString()}–${Math.round(200000*m.avg_pu).toLocaleString()} миль/год для UF=1.6`;
+  } else {
+    ufMaxRangeMain = `${Math.round(60000*m.avg_pu).toLocaleString()}–${Math.round(200000*m.avg_pu).toLocaleString()} миль/год для UF=${m.segment==="Straight"?"3":"1.6"}`;
+  }
+  document.getElementById('metaLine').innerHTML =
+    `Avg PU = ${fmtNum(m.avg_pu)} &nbsp;·&nbsp; VMT/AvgPU = ${m.vmt_per_avg_pu?Math.round(m.vmt_per_avg_pu):'N/A'} &nbsp;·&nbsp; `+
+    `UF = ${fmtNum(m.uf,3)} &nbsp;·&nbsp; Avg PU×UF = ${fmtNum(m.pu_uf)}<br>`+
+    `denom(HOS/DF/CS) = ${fmtNum(m.denom_all,0)} &nbsp;·&nbsp; denom(VM) = ${fmtNum(m.denom_vm,0)} &nbsp;·&nbsp; `+
+    `Инспекций: ${m.inspections_count} &nbsp;·&nbsp; Аварий: ${m.crashes_count}<br>`+
+    `При текущем Avg PU (${fmtNum(m.avg_pu,1)}): нужно ${ufMaxRangeMain}`;
+
+  renderViolationsTable();
+}
+
+function renderViolationsTable(){
+  const onlyUnmatched = document.getElementById('onlyUnmatched').checked;
+  const all = lastResult.violations;
+  const rows = onlyUnmatched ? all.filter(v => !v.matched) : all;
+  const unmatchedCount = all.filter(v => !v.matched).length;
+  document.getElementById('violCounts').innerHTML = `Всего: <b>${all.length}</b> &nbsp;·&nbsp; Не сматчено: <b style="color:var(--warn)">${unmatchedCount}</b>`;
+
+  const tbody = document.getElementById('violBody');
+  tbody.innerHTML = rows.map(v => {
+    const trCls = v.excluded ? "unmatched" : (v.matched ? "" : "unmatched");
+    const badge = v.excluded ? `<span class="badge bad">excluded</span>`
+                : v.matched ? `<span class="badge ok">matched</span>`
+                : `<span class="badge bad">not matched</span>`;
+    const oosCell = v.oos ? `<span class="oos">Y</span>` : "N";
+    const savedCls = state.corrections[v.insp_violation_id] ? "saved" : "";
+    const adjCell = v.citation_result || "";
+    return `<tr class="${trCls}">
+      <td>${v.insp_date||""}</td><td>${v.inspection_id}</td><td>${v.report_number||""}</td><td>${v.level||""}</td><td>${v.viol_code||""}</td>
+      <td>${v.basic||"—"}</td><td>${v.severity_weight??"—"}</td><td>${oosCell}</td><td>${badge}</td>
+      <td class="desc-cell">${adjCell}</td>
+      <td><input class="fixinput ${savedCls}" data-id="${v.insp_violation_id}" value="${state.corrections[v.insp_violation_id]||''}" placeholder="верный код"></td>
+      <td class="desc-cell">${(v.viol_desc||"").slice(0,80)}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.fixinput').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const id = inp.dataset.id, val = inp.value.trim();
+      if(val) state.corrections[id] = val; else delete state.corrections[id];
+      saveLocal();
+      runCalculation(); // пересчитать через бэкенд с новой правкой
+    });
+  });
+}
+
+document.getElementById('onlyUnmatched').addEventListener('change', () => { if(lastResult) renderViolationsTable(); });
+</script>
+</body>
+</html>
