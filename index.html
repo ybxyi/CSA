@@ -43,7 +43,17 @@
   .status.err{color:var(--danger);}
   .basics-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:6px;}
   @media (max-width:760px){ .basics-grid{grid-template-columns:repeat(2,1fr);} }
-  .basic-tile{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:16px;}
+  .basic-tile{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:16px; position:relative; cursor:help;}
+  .basic-tile .tooltip{
+    display:none; position:absolute; left:0; top:calc(100% + 8px); z-index:50;
+    width:320px; background:#0b0f14; border:1px solid var(--accent); border-radius:8px;
+    padding:14px; font-family:var(--font-mono); font-size:11.5px; line-height:1.8; color:var(--text);
+    box-shadow:0 8px 24px rgba(0,0,0,0.5);
+  }
+  .basic-tile:hover .tooltip{display:block;}
+  .basic-tile .tooltip .f-formula{color:var(--muted); font-size:11px;}
+  .basic-tile .tooltip .f-plugged{color:var(--accent); font-size:11.5px; margin-top:4px;}
+  .basic-tile .tooltip .f-note{color:var(--muted2); font-size:10.5px; margin-top:6px;}
   .basic-tile .label{font-size:12.5px; color:var(--muted); margin-bottom:8px;}
   .basic-tile .value{font-family:var(--font-mono); font-size:26px; font-weight:600;}
   .basic-tile .value.na{color:var(--muted2); font-size:18px;}
@@ -385,10 +395,19 @@ function renderAll(){
 
   const grid = document.getElementById('basicsGrid');
   const order = ["Unsafe Driving","Crash Indicator","HOS Compliance","Vehicle Maintenance","Controlled Substances/Alcohol","Driver Fitness"];
+  const formulaData = buildFormulaData();
   grid.innerHTML = order.map(name => {
     const v = lastResult.measures[name];
     const cls = v==null ? "value na" : "value";
-    return `<div class="basic-tile"><div class="label">${name}</div><div class="${cls}">${v==null?"N/A":fmtNum(v)}</div></div>`;
+    const f = formulaData[name];
+    return `<div class="basic-tile">
+      <div class="label">${name}</div><div class="${cls}">${v==null?"N/A":fmtNum(v)}</div>
+      <div class="tooltip">
+        <div class="f-formula">${f.formula}</div>
+        <div class="f-plugged">= ${f.plugged}</div>
+        <div class="f-note">${f.note}</div>
+      </div>
+    </div>`;
   }).join('');
 
   const m = lastResult.meta;
@@ -406,6 +425,44 @@ function renderAll(){
     `При текущем Avg PU (${fmtNum(m.avg_pu,1)}): нужно ${ufMaxRangeMain}`;
 
   renderViolationsTable();
+}
+
+function buildFormulaData(){
+  const rs = lastResult.raw_sums;
+  const m = lastResult.meta;
+
+  return {
+    "Unsafe Driving": {
+      formula: "Σ(Severity Weight × Time Weight) / (Avg PU × UF)",
+      plugged: `${fmtNum(rs["Unsafe Driving"],1)} / (${fmtNum(m.avg_pu,1)} × ${fmtNum(m.uf,3)} = ${fmtNum(m.pu_uf,2)})`,
+      note: "OOS-бонус НЕ применяется в этом BASIC.",
+    },
+    "Crash Indicator": {
+      formula: "Σ(Crash Severity Weight × Time Weight) / (Avg PU × UF)",
+      plugged: `${fmtNum(rs["Crash Indicator"],1)} / ${fmtNum(m.pu_uf,2)}`,
+      note: "Severity: 1 (tow-away) / 2 (injury или fatality), +1 если hazmat release.",
+    },
+    "HOS Compliance": {
+      formula: "Σ((Severity Weight + OOS-бонус) × Time Weight) / Σ(Time Weight всех инспекций)",
+      plugged: `${fmtNum(rs["HOS Compliance"],1)} / ${fmtNum(m.denom_all,0)}`,
+      note: "OOS-бонус +2 применяется. Кап 30 баллов на инспекцию.",
+    },
+    "Vehicle Maintenance": {
+      formula: "Σ(min(30, Σ на инспекции) × Time Weight) / Σ(Time Weight инспекций уровня 1/2)",
+      plugged: `${fmtNum(rs["Vehicle Maintenance"],1)} / ${fmtNum(m.denom_vm,0)}`,
+      note: "OOS-бонус +2 применяется. Только Level 1/2 входят в знаменатель.",
+    },
+    "Controlled Substances/Alcohol": {
+      formula: "Σ(Severity Weight × Time Weight) / Σ(Time Weight всех инспекций)",
+      plugged: `${fmtNum(rs["Controlled Substances/Alcohol"],1)} / ${fmtNum(m.denom_all,0)}`,
+      note: "OOS-бонус НЕ применяется в этом BASIC.",
+    },
+    "Driver Fitness": {
+      formula: "Σ((Severity Weight + OOS-бонус) × Time Weight) / Σ(Time Weight всех инспекций)",
+      plugged: `${fmtNum(rs["Driver Fitness"],1)} / ${fmtNum(m.denom_all,0)}`,
+      note: "OOS-бонус +2 применяется.",
+    },
+  };
 }
 
 function renderViolationsTable(){
