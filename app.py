@@ -317,6 +317,10 @@ def _do_calculate(body):
         "raw_sums": {
             "Unsafe Driving": basic_sums["Unsafe Driving"],
             "Crash Indicator": crash_sum,
+            "HOS Compliance": basic_sums["HOS Compliance"],
+            "Vehicle Maintenance": basic_sums["Vehicle Maintenance"],
+            "Controlled Substances/Alcohol": basic_sums["Controlled Substances/Alcohol"],
+            "Driver Fitness": basic_sums["Driver Fitness"],
         },
         "meta": {
             "avg_pu": avg_pu,
