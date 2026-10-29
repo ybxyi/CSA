@@ -47,6 +47,41 @@ def load_severity_table():
 SEVERITY_TABLE = load_severity_table()
 
 
+def _norm_code(c):
+    """393.47(e) / 393.47E / 393.75A1- -> '393.47e' / '393.47e' / '393.75a1'"""
+    c = (c or "").strip().lower().replace("(", "").replace(")", "").replace(" ", "")
+    return c.rstrip("-.")
+
+
+# нормализованный индекс; неоднозначные ключи отбрасываем
+_NORM_INDEX = {}
+_AMBIG = set()
+for _k in SEVERITY_TABLE:
+    _n = _norm_code(_k)
+    if _n in _NORM_INDEX and _NORM_INDEX[_n] != _k:
+        _AMBIG.add(_n)
+    _NORM_INDEX[_n] = _k
+for _n in _AMBIG:
+    _NORM_INDEX.pop(_n, None)
+
+
+def resolve_code(code):
+    """Возвращает (найденный_код_из_Appendix_A или None, список_подсказок)."""
+    if code in SEVERITY_TABLE:
+        return code, []
+    n = _norm_code(code)
+    hit = _NORM_INDEX.get(n)
+    if hit:
+        return hit, []
+    # подсказки: коды с тем же началом (секция), либо начинающиеся одинаково
+    base = n.split("-")[0]
+    cands = [k for k in SEVERITY_TABLE if _norm_code(k).startswith(base)] if base else []
+    if not cands and "." in base:
+        sec = base.split(".")[0] + "." + "".join(ch for ch in base.split(".")[1] if ch.isdigit())
+        cands = [k for k in SEVERITY_TABLE if _norm_code(k).startswith(sec)]
+    return None, cands[:8]
+
+
 def soda_get(dataset, params):
     url = f"{BASE}/{dataset}.json"
     all_rows = []
@@ -201,7 +236,14 @@ def _do_calculate(body):
     enriched = []
     for v in violations:
         vid = v["insp_violation_id"]
-        code = corrections.get(vid) or v.get("viol_code") or ""
+        raw_code = v.get("viol_code") or ""
+        manual = corrections.get(vid)
+        auto_code, suggestions = (None, [])
+        if manual:
+            code = manual
+        else:
+            auto_code, suggestions = resolve_code(raw_code)
+            code = auto_code or raw_code
         sev = SEVERITY_TABLE.get(code)
         oos = str(v.get("out_of_service_indicator", "")).strip().upper() == "Y"
         tw = tw_by_insp.get(v["inspection_id"], 0)
@@ -231,6 +273,8 @@ def _do_calculate(body):
             "level": level_by_insp.get(v["inspection_id"]),
             "viol_code": v.get("viol_code"),
             "effective_code": code,
+            "auto_matched": bool(auto_code and auto_code != raw_code),
+            "suggestions": suggestions if not sev else [],
             "viol_desc": v.get("viol_desc"),
             "matched": bool(sev) and not excluded,
             "basic": sev["basic"] if sev else None,
