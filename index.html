@@ -76,6 +76,13 @@
   .desc-cell{font-family:var(--font-ui); color:var(--muted); max-width:260px; font-size:12.5px;}
   .table-scroll{overflow-x:auto;}
   .hint{font-size:12px; color:var(--muted2); margin-top:10px;}
+  .insp-row{cursor:pointer;} .insp-row:hover{background:var(--panel2);}
+  .insp-detail td{background:var(--panel2); padding:14px 18px;}
+  .insp-detail table{font-size:12px; margin-bottom:10px;}
+  .insp-sum{color:var(--muted); font-size:12px; line-height:1.7;}
+  .insp-sum b{color:var(--text);}
+  .caret{display:inline-block; width:14px; color:var(--muted);}
+  .dim{opacity:.45; text-decoration:line-through;}
 </style>
 </head>
 <body>
@@ -169,6 +176,17 @@
       </div>
       <div class="status" id="solveMeasureResult"></div>
       <p class="hint">Расчёт держит фиксированным всё, кроме выбранной переменной (сумму взвешенных нарушений/аварий и, во втором случае, Avg PU — берём как есть из последнего расчёта выше).</p>
+    </div>
+
+    <div class="card">
+      <h2>Инспекции (по пунктам)</h2>
+      <p class="sub">Нажми на инспекцию — увидишь каждое нарушение и как считаются баллы: dedup, OOS-бонус, кап 30, time weight.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th></th><th>Дата</th><th>Report #</th><th>Inspection ID</th><th>Level</th><th>Time wt</th><th>Нарушений</th><th>Баллы (взвеш.)</th></tr></thead>
+          <tbody id="inspBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="card">
@@ -389,6 +407,48 @@ async function runCalculation(){
   }
 }
 
+function esc(x){ return String(x==null?"":x).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function renderInspections(){
+  const body = document.getElementById('inspBody');
+  const list = lastResult.inspections || [];
+  body.innerHTML = list.map((it, i) => {
+    const total = Object.values(it.by_basic).reduce((a,b)=>a+b.weighted,0);
+    return `<tr class="insp-row" data-i="${i}">
+      <td><span class="caret">▸</span></td><td>${it.insp_date}</td><td>${esc(it.report_number)}</td><td>${esc(it.inspection_id)}</td>
+      <td>${esc(it.level)}</td><td>${it.time_weight}</td><td>${it.violations.length}</td><td>${total?fmtNum(total):"—"}</td></tr>
+      <tr class="insp-detail" id="insp-d-${i}" style="display:none;"><td colspan="8">${inspDetailHtml(it)}</td></tr>`;
+  }).join('') || '<tr><td colspan="8">Нет инспекций в окне 24 месяцев</td></tr>';
+  body.querySelectorAll('.insp-row').forEach(tr => tr.addEventListener('click', () => {
+    const d = document.getElementById('insp-d-'+tr.dataset.i);
+    const open = d.style.display === 'none';
+    d.style.display = open ? '' : 'none';
+    tr.querySelector('.caret').textContent = open ? '▾' : '▸';
+  }));
+}
+function inspDetailHtml(it){
+  let h = `<div class="insp-sum">Time weight: <b>${it.time_weight}</b> · В знаменателе VM (Level 1/2): <b>${it.counts_in_vm_denom?"да":"нет"}</b></div>`;
+  if(!it.violations.length) return h + '<div class="insp-sum">Нарушений нет (идёт только в знаменатели).</div>';
+  h += `<table><thead><tr><th>Код</th><th>Описание</th><th>BASIC</th><th>Severity</th><th>OOS</th><th>Баллы</th><th>Заметка</th></tr></thead><tbody>` +
+  it.violations.map(v => {
+    const notes = [];
+    if(!v.matched && !v.excluded) notes.push("нет в Appendix A");
+    if(v.excluded) notes.push("исключено: "+esc(v.citation_result));
+    else if(v.citation_result) notes.push("adjudication: "+esc(v.citation_result));
+    if(v.duplicate) notes.push("дубль кода — не считается");
+    if(v.oos && v.matched && !v.oos_bonus_applied && !v.duplicate) notes.push("OOS-бонус для этого BASIC не применяется");
+    const dim = (v.duplicate || v.excluded) ? ' class="dim"' : '';
+    const pts = (v.points!=null && !v.duplicate) ? v.points : "—";
+    return `<tr${dim}><td>${esc(v.effective_code)}</td><td>${esc(v.viol_desc)}</td><td>${esc(v.basic||"—")}</td>
+      <td>${v.severity_weight==null?"—":v.severity_weight}</td><td>${v.oos?"Y":""}${v.oos_bonus_applied?" (+2)":""}</td><td>${pts}</td><td>${notes.join("; ")}</td></tr>`;
+  }).join('') + '</tbody></table>';
+  const bb = Object.entries(it.by_basic);
+  if(bb.length){
+    h += '<div class="insp-sum">' + bb.map(([n,b]) =>
+      `<b>${n}</b>: ${b.raw} б.${b.raw>30?` → кап 30`:''} × ${it.time_weight} = <b>${fmtNum(b.weighted)}</b>`).join('<br>') + '</div>';
+  }
+  return h;
+}
+
 function renderAll(){
   document.getElementById('results').style.display = "block";
   document.getElementById('asOfEcho').textContent = document.getElementById('asOfDate').value;
@@ -424,6 +484,7 @@ function renderAll(){
     `Инспекций: ${m.inspections_count} &nbsp;·&nbsp; Аварий: ${m.crashes_count}<br>`+
     `При текущем Avg PU (${fmtNum(m.avg_pu,1)}): нужно ${ufMaxRangeMain}`;
 
+  renderInspections();
   renderViolationsTable();
 }
 
