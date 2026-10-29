@@ -254,6 +254,7 @@ def _do_calculate(body):
         "Driver Fitness": True,
     }
     basic_sums = {}
+    insp_breakdown = {}  # inspection_id -> {basic: {raw, capped, weighted}}
     for name in basic_names:
         subset = [v for v in enriched if v["basic"] == name and not v["excluded"]]
         apply_oos = OOS_BONUS_APPLIES[name]
@@ -266,18 +267,28 @@ def _do_calculate(body):
             key = (v["inspection_id"], v["effective_code"])
             if key not in dedup:
                 dedup[key] = v
-            elif v["oos"]:
-                dedup[key]["oos"] = True
+                v["duplicate"] = False
+            else:
+                v["duplicate"] = True
+                if v["oos"]:
+                    dedup[key]["oos"] = True
 
         by_insp = {}
         for v in dedup.values():
             raw = (v["severity_weight"] or 0) + (2 if (v["oos"] and apply_oos) else 0)
             by_insp[v["inspection_id"]] = by_insp.get(v["inspection_id"], 0) + raw
 
+        # баллы каждого нарушения (после dedup и OOS-правил)
+        for v in dedup.values():
+            v["points"] = (v["severity_weight"] or 0) + (2 if (v["oos"] and apply_oos) else 0)
+            v["oos_bonus_applied"] = bool(v["oos"] and apply_oos)
+
         total = 0.0
         for insp_id, raw in by_insp.items():
             capped = min(raw, 30)  # кап 30 баллов на инспекцию — для ВСЕХ BASIC
-            total += capped * tw_by_insp.get(insp_id, 0)
+            w = capped * tw_by_insp.get(insp_id, 0)
+            total += w
+            insp_breakdown.setdefault(insp_id, {})[name] = {"raw": raw, "capped": capped, "weighted": w}
         basic_sums[name] = total
 
     denom_all = sum(tw_by_insp.values())
@@ -312,7 +323,25 @@ def _do_calculate(body):
         "Driver Fitness": basic_sums["Driver Fitness"] / denom_all if denom_all else None,
     }
 
+    viols_by_insp = {}
+    for v in enriched:
+        viols_by_insp.setdefault(v["inspection_id"], []).append(v)
+    insp_out = []
+    for r in sorted(inspections, key=lambda x: x["_insp_date"], reverse=True):
+        iid = r["inspection_id"]
+        insp_out.append({
+            "inspection_id": iid,
+            "report_number": r.get("report_number"),
+            "insp_date": r["_insp_date"].strftime("%Y-%m-%d"),
+            "level": str(r.get("insp_level_id")),
+            "time_weight": r["_time_weight"],
+            "counts_in_vm_denom": str(r.get("insp_level_id")) in ("1", "2"),
+            "violations": viols_by_insp.get(iid, []),
+            "by_basic": insp_breakdown.get(iid, {}),
+        })
+
     return jsonify({
+        "inspections": insp_out,
         "measures": measures,
         "raw_sums": {
             "Unsafe Driving": basic_sums["Unsafe Driving"],
