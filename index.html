@@ -81,6 +81,7 @@
   .insp-detail table{font-size:12px; margin-bottom:10px;}
   .insp-sum{color:var(--muted); font-size:12px; line-height:1.7;}
   .insp-sum b{color:var(--text);}
+  .sugg{color:var(--accent);}
   .caret{display:inline-block; width:14px; color:var(--muted);}
   .dim{opacity:.45; text-decoration:line-through;}
 </style>
@@ -537,7 +538,7 @@ function renderViolationsTable(){
   tbody.innerHTML = rows.map(v => {
     const trCls = v.excluded ? "unmatched" : (v.matched ? "" : "unmatched");
     const badge = v.excluded ? `<span class="badge bad">excluded</span>`
-                : v.matched ? `<span class="badge ok">matched</span>`
+                : v.matched ? `<span class="badge ok">matched</span>${v.auto_matched?` <span class="badge ok" title="Код из FMCSA: ${esc(v.viol_code)}">авто → ${esc(v.effective_code)}</span>`:""}`
                 : `<span class="badge bad">not matched</span>`;
     const oosCell = v.oos ? `<span class="oos">Y</span>` : "N";
     const savedCls = state.corrections[v.insp_violation_id] ? "saved" : "";
@@ -546,11 +547,16 @@ function renderViolationsTable(){
       <td>${v.insp_date||""}</td><td>${v.inspection_id}</td><td>${v.report_number||""}</td><td>${v.level||""}</td><td>${v.viol_code||""}</td>
       <td>${v.basic||"—"}</td><td>${v.severity_weight??"—"}</td><td>${oosCell}</td><td>${badge}</td>
       <td class="desc-cell">${adjCell}</td>
-      <td><input class="fixinput ${savedCls}" data-id="${v.insp_violation_id}" value="${state.corrections[v.insp_violation_id]||''}" placeholder="верный код"></td>
+      <td><input class="fixinput ${savedCls}" data-id="${v.insp_violation_id}" value="${state.corrections[v.insp_violation_id]||''}" placeholder="верный код">${(!v.matched && v.suggestions && v.suggestions.length)?`<div class="insp-sum">похожие: ${v.suggestions.map(c=>`<a href="#" class="sugg" data-id="${v.insp_violation_id}" data-code="${esc(c)}">${esc(c)}</a>`).join(", ")}</div>`:""}</td>
       <td class="desc-cell">${(v.viol_desc||"").slice(0,80)}</td>
     </tr>`;
   }).join('');
 
+  tbody.querySelectorAll('.sugg').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    state.corrections[a.dataset.id] = a.dataset.code;
+    saveLocal(); runCalculation();
+  }));
   tbody.querySelectorAll('.fixinput').forEach(inp => {
     inp.addEventListener('change', () => {
       const id = inp.dataset.id, val = inp.value.trim();
